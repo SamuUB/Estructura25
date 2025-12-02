@@ -1,0 +1,190 @@
+; --------- MACROS ---------
+LEA: MACRO(reg, ETIQ)
+    or reg, r0, low(ETIQ)
+    or.u reg, reg, high(ETIQ)
+ENDMACRO
+
+LOAD: MACRO(reg, ETIQ)
+    LEA(reg, ETIQ)
+    ld reg, r0, reg
+ENDMACRO
+
+PUSH: MACRO(ra)
+    subu r30, r30, 4
+    st ra, r30, 0
+ENDMACRO
+
+POP: MACRO(ra)
+    ld ra, r30, 0
+    addu r30, r30, 4
+ENDMACRO
+
+    org 0x1000
+ppal:
+    LEA(r30, 0xF000)                                ; Inicializar puntero de pila (r30 = 0xF000)
+    or r11, r0, 0               ; r11 ← número de bit a leer
+    PUSH(r11)                   ; Apilar número de bit
+    LEA(r10, campoBits)         ; r10 ← dirección de campoBits
+    PUSH(r10)                   ; Apilar dirección
+    bsr LeeBit                  ; Llamar a rutina que lee el bit
+    addu r30, r30, 8            ; Limpiar pila
+
+    or r23, r0, 0               ; r23 ← valor esperado (bit activado)
+    cmp r7, r29, r23            ; Comparar resultado leído con 1
+    bb1 ne, r7, falloLB         ; Si no son iguales, saltar a fallo
+    addu r27, r27, 1            ; Incrementar contador de éxitos
+
+    ;Test2: Leer bit 64 y mostrar que no está activado
+test2:or r11, r0, 1              ; r11 ← número de bit a leer
+    PUSH(r11)                   ; Apilar número de bit
+    LEA(r10, campoBits)         ; r10 ← dirección de campoBits
+    PUSH(r10)                   ; Apilar dirección
+    bsr LeeBit                  ; Llamar a rutina que lee el bit
+    addu r30, r30, 8            ; Limpiar pila
+
+    or r23, r0, 1               ; r23 ← valor esperado (bit activado)
+    cmp r7, r29, r23            ; Comparar resultado leído con 1
+    bb1 ne, r7, falloLB         ; Si no son iguales, saltar a fallo
+    addu r27, r27, 1            ; Incrementar contador de éxitos
+test3:or r11, r0, 2              ; r11 ← número de bit a leer
+    PUSH(r11)                   ; Apilar número de bit
+    LEA(r10, campoBits)         ; r10 ← dirección de campoBits
+    PUSH(r10)                   ; Apilar dirección
+    bsr LeeBit                  ; Llamar a rutina que lee el bit
+    addu r30, r30, 8            ; Limpiar pila
+
+    or r23, r0, 0               ; r23 ← valor esperado (bit activado)
+    cmp r7, r29, r23            ; Comparar resultado leído con 1
+    bb1 ne, r7, falloLB         ; Si no son iguales, saltar a fallo
+    addu r27, r27, 1            ; Incrementar contador de éxitos
+test4:or r11, r0, 3              ; r11 ← número de bit a leer
+    PUSH(r11)                   ; Apilar número de bit
+    LEA(r10, campoBits)         ; r10 ← dirección de campoBits
+    PUSH(r10)                   ; Apilar dirección
+    bsr LeeBit                  ; Llamar a rutina que lee el bit
+    addu r30, r30, 8            ; Limpiar pila
+
+    or r23, r0, 1               ; r23 ← valor esperado (bit activado)
+    cmp r7, r29, r23            ; Comparar resultado leído con 1
+    bb1 ne, r7, falloLB         ; Si no son iguales, saltar a fallo
+    addu r27, r27, 1            ; Incrementar contador de éxitos
+
+falloLB:
+    stop                        ; Fin del programa
+
+LeeBit:
+    ; Guardar r1 y r31
+    PUSH    (r1)                                    
+    PUSH    (r31)                                   
+    or      r31, r30, r0                             ; Marco de pila
+
+    ; Cargar parámetros
+    ld      r10, r31, 8                              ; r10 = dirZonaCB
+    ld      r11, r31, 12                             ; r11 = NumBit
+    or      r29,r0,0         
+
+    ; byteOffset 
+    divs     r12, r11, 8                            ; r12 = NumBit / 8      
+
+    ; Obtener NumBit dentro del byte correspondiente
+    or r18, r0, 8      ; Carga el valor 8 en r18
+
+    mulu r18,r18,r12
+    subu r13,r11,r18                                                                                                                
+    or r14, r0, 7                                   ; r14 = 7
+    subu r13, r14, r13                              ; r13 = 7 - r13 => posición de bit en el byte
+
+    ; Preparar mascara
+    or r3,r0,1                                      ;r3 = 1
+    or r4,r0,2                                      ;r4 = 2
+
+    addu r16, r10, r12                              ; r16 = dirZonaCB + byteOffset (dirección del byte)
+    ld.bu r17, r16, r0                              ; r17 = contenido byte actual (lectura)
+    cmp r7,r17,r0
+    bb1 eq,r7,finLB
+
+
+    ;Desplazar contenido byte a la dcha para dejar el bit x en posicion 0
+    BucleLB1:
+    cmp r7,r13,r0                                   ; Comprobamos si estamos en NumBit
+    bb1 eq,r7,LB2                                   ; Si estamos => PBA1
+    cmp r7,r17,r0
+    bb1 eq,r7,LB2_0 
+    divu r17,r17,r4                                 ; Desplazamos r17 un bit a la dcha
+    subu r13,r13,1                                  ; Decrementamos contador de NumBit
+    br BucleLB1
+
+    LB2_0:
+        or r29,r0,r0
+        br finLB
+    ;Aplicamos mascara
+    LB2:
+    and     r29,r17,r3                              ; Aplicamos mascara y guardamos en r29
+    finLB:
+    ; Restaurar pila y retornar
+    POP(r31)
+    POP(r1)
+    jmp (r1)                                        ; Retorno
+
+PoneBitA1:                                                                                   
+    ; PoneBitA1(dirZonaCB, NumBit)
+    ; r10 = dirZonaCB (dir del campo de bits)
+    ; r11 = NumBit (numero bit a activar)
+    ; r12 = byteOffset
+    ; r18 = 8 × byteOffset (para calcular posicion bit dentro del byte)
+    ; r13 = posición del bit dentro del byte (de 7 a 0)
+    ; r14 = constante 7 
+    ; r3  = mascara con el bit deseado activado
+    ; r4  = constante 2 (para desplazar máscara)
+    ; r7  = registro para comparaciones
+    ; r16 = dir del byte a modificar (dirZonaCB + byteOffset)
+    ; r17 = contenido del byte leido y despues actualizado
+
+    ; Guardar r1 y r31
+    PUSH    (r1)                                    
+    PUSH    (r31)                                   
+    or      r31, r30, r0                             ; Marco de pila
+
+    ; Cargar parámetros
+    ld      r10, r31, 8                              ; r10 = dirZonaCB
+    ld      r11, r31, 12                             ; r11 = NumBit         
+
+    ; byteOffset 
+    divs     r12, r11, 8                            ; r12 = NumBit / 8      
+
+    ; Obtener NumBit dentro del byte correspondiente
+    or r18,r0,8
+    mulu r18,r18,r12                                                        
+    subu r13,r11,r18                                                        
+    or r14, r0, 7                                   ; r14 = 7
+    subu r13, r14, r13                              ; r13 = 7 - r13 => posición de bit en el byte
+
+    ; Preparar mascara
+    or r3,r0,1                                      ;r3 = 1
+    or r4,r0,2                                      ;r4 = 2
+
+    BuclePBA1:
+    cmp r7,r13,r0                                   ; Comprobamos si estamos en NumBit
+    bb1 eq,r7,PBA1                                  ; Si estamos => PBA1 
+    muls r3,r4,r3                                   ; Desplazamos r3 un bit a la izqda
+    subu r13,r13,1                                  ; Decrementamos contador de NumBit
+    br BuclePBA1                                    
+    
+    ; Leer byte actual, modificarlo y almacenarlo
+    PBA1:
+    ld.b r17, r10, r12                              ; r17 = contenido byte actual (lectura)
+
+    or r17, r17, r3                                 ; r17 = byte actualizado  (poner el bit r11 a 1)
+    st.b r17, r10, r12                                ; Escribir byte modificado en memoria
+
+    ; Restaurar pila y retornar
+    POP(r31)
+    POP(r1)
+    jmp (r1)                                        ; Retorno
+
+
+
+
+org 0xB000                                           ; Dirección donde se reserva campoBits
+campoBits: data 0x54
+

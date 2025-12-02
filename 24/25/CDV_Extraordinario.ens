@@ -25,11 +25,11 @@ ppal:
     or r30, r0, 0xF000  ; Inicializar puntero de pila
     
     ; Prueba de LongCad
-    LEA(r10, cadena1)
-    PUSH(r10)
-    bsr LongCad
-    addu r30, r30, 4
-    or r11, r29, r0     ; Guardar resultado
+    ;LEA(r10, cadena1)
+    ;PUSH(r10)
+    ;bsr LongCad
+    ;addu r30, r30, 4
+    ;or r11, r29, r0     ; Guardar resultado
     
     ; Prueba de BuscaCar
     LOAD(r10, c_buscar)
@@ -45,13 +45,13 @@ ppal:
     or r15, r29, r0     ; Guardar resultado
     
     ; Prueba de CoincidenCad
-    LEA(r10, cadena1)
-    LEA(r11, cadena2)
-    PUSH(r11)
-    PUSH(r10)
-    bsr CoincidenCad
-    addu r30, r30, 8
-    or r16, r29, r0     ; Guardar resultado
+    ;LEA(r10, cadena1)
+    ;LEA(r11, cadena2)
+    ;PUSH(r11)
+    ;PUSH(r10)
+    ;bsr CoincidenCad
+    ;addu r30, r30, 8
+    ;or r16, r29, r0     ; Guardar resultado
     
     ; Prueba de Comprime y Descomprime
     LEA(r10, cadena1)
@@ -190,11 +190,43 @@ PoneBitA1:
     or r6, r0, 7       ; constante 7
     subu r5, r6, r5    ; posicion = 7 - (NumBit % 8)
     
-    ; Crear máscara con un 1 en la posición correspondiente
-    or r6, r0, 1       ; r6 = 0...01
-    mak r6, r6, 1<0>   ; Longitud 1 bit, origen en posición 0
-    rot r6, r6, r5     ; Rotar a la posición correcta
+    ; Crear máscara usando tabla de potencias de 2
+    or r6, r0, 1       ; r6 = 1
+    cmp r7, r5, r0     ; ¿posicion == 0?
+    bb1 eq, r7, mask_ready
+    cmp r7, r5, 1      ; ¿posicion == 1?
+    bb1 ne, r7, try2
+    or r6, r0, 2       ; r6 = 2
+    br mask_ready
+try2:
+    cmp r7, r5, 2      ; ¿posicion == 2?
+    bb1 ne, r7, try3
+    or r6, r0, 4       ; r6 = 4
+    br mask_ready
+try3:
+    cmp r7, r5, 3      ; ¿posicion == 3?
+    bb1 ne, r7, try4
+    or r6, r0, 8       ; r6 = 8
+    br mask_ready
+try4:
+    cmp r7, r5, 4      ; ¿posicion == 4?
+    bb1 ne, r7, try5
+    or r6, r0, 16      ; r6 = 16
+    br mask_ready
+try5:
+    cmp r7, r5, 5      ; ¿posicion == 5?
+    bb1 ne, r7, try6
+    or r6, r0, 32      ; r6 = 32
+    br mask_ready
+try6:
+    cmp r7, r5, 6      ; ¿posicion == 6?
+    bb1 ne, r7, try7
+    or r6, r0, 64      ; r6 = 64
+    br mask_ready
+try7:
+    or r6, r0, 128     ; r6 = 128 (posicion == 7)
     
+mask_ready:
     ; Calcular dirección del byte a modificar
     addu r7, r2, r4    ; r7 = dirZonaCB + índice
     
@@ -229,11 +261,43 @@ LeeBit:
     or r6, r0, 7       ; constante 7
     subu r5, r6, r5    ; posicion = 7 - (NumBit % 8)
     
-    ; Crear máscara con un 1 en la posición correspondiente
-    or r6, r0, 1       ; r6 = 0...01
-    mak r6, r6, 1<0>   ; Longitud 1 bit, origen en posición 0
-    rot r6, r6, r5     ; Rotar a la posición correcta
+    ; Crear máscara usando tabla de potencias de 2
+    or r6, r0, 1       ; r6 = 1
+    cmp r7, r5, r0     ; ¿posicion == 0?
+    bb1 eq, r7, mask_ready_leebit
+    cmp r7, r5, 1      ; ¿posicion == 1?
+    bb1 ne, r7, try2_leebit
+    or r6, r0, 2       ; r6 = 2
+    br mask_ready_leebit
+try2_leebit:
+    cmp r7, r5, 2      ; ¿posicion == 2?
+    bb1 ne, r7, try3_leebit
+    or r6, r0, 4       ; r6 = 4
+    br mask_ready_leebit
+try3_leebit:
+    cmp r7, r5, 3      ; ¿posicion == 3?
+    bb1 ne, r7, try4_leebit
+    or r6, r0, 8       ; r6 = 8
+    br mask_ready_leebit
+try4_leebit:
+    cmp r7, r5, 4      ; ¿posicion == 4?
+    bb1 ne, r7, try5_leebit
+    or r6, r0, 16      ; r6 = 16
+    br mask_ready_leebit
+try5_leebit:
+    cmp r7, r5, 5      ; ¿posicion == 5?
+    bb1 ne, r7, try6_leebit
+    or r6, r0, 32      ; r6 = 32
+    br mask_ready_leebit
+try6_leebit:
+    cmp r7, r5, 6      ; ¿posicion == 6?
+    bb1 ne, r7, try7_leebit
+    or r6, r0, 64      ; r6 = 64
+    br mask_ready_leebit
+try7_leebit:
+    or r6, r0, 128     ; r6 = 128 (posicion == 7)
     
+mask_ready_leebit:
     ; Calcular dirección del byte a leer
     addu r7, r2, r4    ; r7 = dirZonaCB + índice
     
@@ -265,9 +329,11 @@ Comprime:
     ld r3, r31, 12     ; r3 = comprdo (dirección)
     
     ; 1. Determinar longitud del texto
+    PUSH(r2)           ; Guardar r2 (dirección del texto)
     PUSH(r2)           ; Pasar texto como parámetro
     bsr LongCad        ; Llamar a LongCad
     addu r30, r30, 4   ; Ajustar pila
+    POP(r2)            ; Restaurar r2 (dirección original del texto)
     or r4, r29, r0     ; r4 = longitud del texto
     
     ; 2. Reservar espacio en pila para pilaZona3 (caso peor)
@@ -287,7 +353,7 @@ Comprime:
     or r10, r0, 0      ; r10 = contador para 8 caracteres
 copiar_iniciales_loop:
     cmp r11, r10, 8    ; ¿Copiados 8 caracteres?
-    bb1 ge, r11, fin_copiar_iniciales
+    bb1 ge, r11, compress_loop
     
     ld.bu r12, r2, r7  ; Leer carácter
     st.b r12, r6, r8   ; Guardar en pilaZona3
@@ -297,8 +363,6 @@ copiar_iniciales_loop:
     addu r10, r10, 1   ; Incrementar contador
     br copiar_iniciales_loop
 
-fin_copiar_iniciales:
-    ; 5. Procesar el resto del texto
 compress_loop:
     ld.bu r12, r2, r7  ; Leer carácter
     cmp r11, r12, 0    ; ¿Fin de texto?
@@ -349,8 +413,10 @@ comprimir_subcadena:
     PUSH(r9)            ; Guardar nBit
     PUSH(r3)            ; Guardar comprdo
     
-    PUSH(r9)            ; Pasar NumBit
-    PUSH(r3)            ; Pasar dirZonaCB
+    subu r16, r9, 8     ; r16 = nBit - 8 (ajustar por bits implícitos)
+    PUSH(r16)           ; Pasar NumBit ajustado
+    addu r16, r3, 5     ; r16 = comprdo + 5 (inicio mapa bits)
+    PUSH(r16)           ; Pasar dirZonaCB (inicio del mapa de bits)
     bsr PoneBitA1       ; Llamar a PoneBitA1
     addu r30, r30, 8    ; Ajustar pila
     
@@ -449,33 +515,32 @@ Descomprime:
     
     or r10, r0, 0      ; r10 = posición en desc
     or r11, r0, 0      ; r11 = posición en zona3
-    or r12, r0, 0      ; r12 = nBit
+    or r12, r0, 8      ; r12 = nBit (empezar en 8 por los bits implícitos)
     
     ; 2. Copiar M*8 caracteres iniciales
     or r13, r0, 0      ; r13 = contador
 copiar_primeros_loop:
     cmp r14, r13, r6   ; ¿Copiados M*8 caracteres?
-    bb1 ge, r14, fin_copiar_primeros
+    bb1 ge, r14, decomp_loop
     
     ld.bu r15, r9, r11 ; Leer carácter
-    st.bu r15, r3, r10  ; Guardar en desc
+    st.b r15, r3, r10  ; Guardar en desc
     
     addu r10, r10, 1   ; Avanzar en desc
     addu r11, r11, 1   ; Avanzar en zona3
     addu r13, r13, 1   ; Incrementar contador
     br copiar_primeros_loop
 
-fin_copiar_primeros:
-    ; 3. Procesar el resto del texto
 decomp_loop:
     cmp r13, r10, r4   ; ¿Descomprimida toda la longitud original?
     bb1 ge, r13, fin_decomp_loop
     
     ; Leer bit
-    PUSH(r12)          ; Pasar NumBit
-    PUSH(r8)           ; Pasar dirZonaCB
-    bsr LeeBit         ; Llamar a LeeBit
-    addu r30, r30, 8   ; Ajustar pila
+    subu r16, r12, 8    ; r16 = nBit - 8 (ajustar por bits implícitos)
+    PUSH(r16)           ; Pasar NumBit ajustado
+    PUSH(r8)            ; Pasar dirZonaCB
+    bsr LeeBit          ; Llamar a LeeBit
+    addu r30, r30, 8    ; Ajustar pila
     
     ; Incrementar nBit
     addu r12, r12, 1   ; nBit++
@@ -486,7 +551,7 @@ decomp_loop:
     
     ; Bit = 0: Copiar carácter directo
     ld.bu r14, r9, r11 ; Leer carácter
-    st.bu r14, r3, r10  ; Guardar en desc
+    st.b r14, r3, r10  ; Guardar en desc
     
     addu r10, r10, 1   ; Avanzar en desc
     addu r11, r11, 1   ; Avanzar en zona3
@@ -521,7 +586,7 @@ copiar_subcadena_loop:
     ld.bu r14, r3, r18 ; Leer carácter de desc[P+contador]
     
     addu r18, r10, r17 ; r18 = posición actual + contador
-    st.bu r14, r3, r18  ; Guardar en desc
+    st.b r14, r3, r18  ; Guardar en desc
     
     addu r17, r17, 1   ; Incrementar contador
     br copiar_subcadena_loop
@@ -537,7 +602,7 @@ error_descomp:
     
 fin_decomp_loop:
     ; 4. Añadir terminador
-    st.bu r0, r3, r10   ; Añadir \0 al final
+    st.b r0, r3, r10   ; Añadir \0 al final
     
     ; 5. Retornar longitud
     or r29, r4, r0     ; r29 = longitud original
@@ -566,9 +631,11 @@ Verifica:
     ld r4, r31, 16     ; r4 = Long2 (dirección)
     
     ; 1. Calcular longitud del texto original
+    PUSH(r2)           ; Guardar r2 (dirección del texto)
     PUSH(r2)           ; Pasar texto como parámetro
     bsr LongCad        ; Llamar a LongCad
     addu r30, r30, 4   ; Ajustar pila
+    POP(r2)            ; Restaurar r2 (dirección original del texto)
     or r5, r29, r0     ; r5 = longitud de texto
     
     ; Guardar Long1 (asegurar que se guarda como byte)
@@ -639,6 +706,8 @@ Verifica:
     bsr CoincidenCad   ; Llamar a CoincidenCad
     addu r30, r30, 8   ; Ajustar pila
     
+    ; CoincidenCad devuelve el número de caracteres que coinciden
+    ; Si coinciden todos, debe ser igual a la longitud
     cmp r12, r29, r5   ; ¿Coinciden todos los caracteres?
     bb1 ne, r12, contenidos_diferentes
     
@@ -670,7 +739,7 @@ cadena1: data "Ilia Topuria es ahora mismo el mejor luchador del mundo en mma\0"
 cadena2: data "No me gusta mucho el futbol cuando gritan goool mmmucho\0"
 c_buscar: data "m"
 desde: data 0
-hasta: data 20
+hasta: data 0
 textoComp: res 200
 textoDesc: res 200
 long1: res 4

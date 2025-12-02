@@ -1,0 +1,281 @@
+; --------- MACROS ---------
+LEA: MACRO(reg, ETIQ)
+    or reg, r0, low(ETIQ)
+    or.u reg, reg, high(ETIQ)
+ENDMACRO
+
+LOAD: MACRO(reg, ETIQ)
+    LEA(reg, ETIQ)
+    ld reg, r0, reg
+ENDMACRO
+
+PUSH: MACRO(ra)
+    subu r30, r30, 4
+    st ra, r30, 0
+ENDMACRO
+
+POP: MACRO(ra)
+    ld ra, r30, 0
+    addu r30, r30, 4
+ENDMACRO
+
+;PREGUNTAR SI SE PUEDE O NO A LOS PROFES
+PUSH3: MACRO(reg1, reg2, reg3)
+    PUSH(reg1)
+    PUSH(reg2)
+    PUSH(reg3)
+ENDMACRO
+
+
+    org 0x1000
+ppal:
+    stop
+
+Comprime:
+    ; ============================================================
+    ; SUBRUTINA: Comprime
+    ; ------------------------------------------------------------
+    ; Objetivo:
+    ;   Comprime el texto original (parámetro 1) y deja el
+    ;   resultado en la zona indicada (parámetro 2).
+    ;   Devuelve en r2 la longitud total del texto comprimido.
+    ;
+    ; ------------------------------------------------------------
+    ; REGISTROS UTILIZADOS:
+    ; ------------------------------------------------------------
+    ; r3   = Longitud original
+    ; r2   = Longitud total del texto comprimido (resultado final)
+    ; r8   = Constante M (número de caracteres sin comprimir: 8)
+    ; r9   = Constante N (longitud mínima para comprimir: 4)
+    ; r10  = Dirección del texto original
+    ; r11  = Dirección del texto comprimido (salida)
+    ; r12  = Dirección del mapa de bits (comprdo + 5)
+    ; r13  = Índice en el texto original
+    ; r14  = Índice en pilaZona3 (temporal en pila)
+    ; r15  = Número de bit en el mapa de bits
+    ; r16  = Dirección de pilaZona3 (reservada en pila)
+    ; r20  = LongitudTexto - M*8 (para mapa de bits)
+    ; r21  = Número de bytes del mapa de bits
+    ; r22  = Tamaño reservado para pilaZona3 (ajustado a múltiplo de 4)
+    ; r23  = Resto para alineación
+    ; r24  = Auxiliar para comparaciones
+    ; r25  = Carácter temporal para copia
+    ; r29  = Valor devuelto por subrutinas (LongCad, BuscaMax...)
+    ; ------------------------------------------------------------
+    ; PILA:
+    ;   [r31+8]  = Dirección del texto original
+    ;   [r31+12] = Dirección del texto comprimido
+    ; ============================================================
+
+    ; --- Salvaguarda del contexto ---
+    PUSH    (r1)                  ; Guarda dirección de retorno
+    PUSH    (r31)                 ; Guarda marco de pila anterior
+    or      r31, r30, r0        ; Activa nuevo marco de pila
+
+    ; --- Calcular longitud del texto original ---
+    ld      r10, r31, 8         ; r10 = dirección del texto original
+    PUSH    (r10)                 ; Prepara parámetro para LongCad
+    bsr     LongCad             ; Llama a LongCad → devuelve longitud en r29
+    POP     (r10)                  ; Recupera r10 (dirección del texto)
+    
+    
+    ; --- Inicialización de variables ---
+    ld      r11, r31, 12        ; r11 = dirección del texto comprimido
+    or    r8,  r0, 8          ; r8 = M (número de caracteres sin comprimir: 8)
+    or    r9,  r0, 4          ; r9 = N (longitud mínima para comprimir: 4)
+    or    r2,  r0, r0         ; r2 = longitud comprimido (inicialmente 0)
+    or    r3, r29,r0          ; r3 = longitud original
+
+    ; --- Calcular dirección del mapa de bits ---
+    addu  r12, r11, 5         ; r12 = dirección del mapa de bits (después de cabecera de 5 bytes)
+
+    ; --- Calcular tamaño del mapa de bits ---
+    subu  r20, r29, r8        ; r20 = longitudTexto - M*8
+    addu  r21, r20, 7         ; r21 = longitudTexto - M*8 + 7 (para redondear)
+    divu  r21, r21, 8         ; r21 = número de bytes del mapa de bits
+
+    ; --- Reservar espacio para pilaZona3 en la pila ---
+    or    r22, r29, r0        ; r22 = longitudTexto (caso peor: sin compresión)
+    andi  r23, r22, 3         ; r23 = cargamos un 3 para alineación
+    cmp   r7, r23, r10        ; si en r23 hay un 0 es que r22 es multiplo de 4
+    bb1   eq, r7, zona3_ok    ; Si ya está alineado, saltar
+    subu  r22, r22, r23       ; Ajustar hacia abajo
+    addu  r22, r22, 4         ; Sumar al múltiplo anterior 4 para estar alineados y con suficiente espacio
+zona3_ok:
+    subu  r30, r30, r22       ; Reserva espacio en la pila
+    or    r16, r30, r0        ; r16 = dirección de pilaZona3 (temporal)
+
+    ; --- Inicializar marcadores ---
+    or    r13, r0, r0         ; r13 = índice en texto original
+    or    r14, r0, r0         ; r14 = índice en pilaZona3
+    or    r15, r0, r0         ; r15 = número de bit en mapa de bits
+
+    ; --- Copiar los primeros M*8 caracteres sin comprimir ---
+bucle_copia:
+    cmp   r24, r13, r8        ; ¿hemos copiado 8 caracteres?
+    bb1   ge, r24, fin_copia  ; Si sí, salir del bucle
+    ld.b  r25, r10, r13       ; r25 = carácter del texto original
+    st.b  r25, r16, r14       ; Guardar carácter en pilaZona3
+    addu  r13, r13, 1         ; Avanzar índice texto
+    addu  r14, r14, 1         ; Avanzar índice pilaZona3
+    br    bucle_copia
+fin_copia:
+    ;ANTES DE ENTRARA AL BUCLE HACEMOS PUSH
+    PUSH(r2);
+    PUSH(r3);
+    PUSH(r8);
+    PUSH(r9);
+    PUSH(r10);
+    PUSH(r11);
+    PUSH(r12);
+    PUSH(r13);
+    PUSH(r14);
+    PUSH(r15);
+    PUSH(r16);
+    PUSH();
+    PUSH();
+    PUSH();
+
+
+; Bucle principal:
+; - Recorre el texto desde la posición M*8 hasta el final.
+; - Para cada posición:
+;   1. Llama a BuscaMax para encontrar la subcadena repetida más larga.
+;   2. Si la longitud encontrada (L) < N:
+;        - Copia el carácter actual a zona3.
+;        - Avanza índices (texto, zona3, mapa de bits).
+;   3. Si L >= N:
+;        - Marca el bit correspondiente en el mapa de bits (PoneBitA1).
+;        - Guarda en zona3 la referencia (posición previa P y longitud L).
+;        - Avanza índices (texto salta L, zona3 suma 3 bytes, mapa de bits +1).
+; - Repite hasta procesar todos los caracteres del texto.
+
+bucle_principal:
+    cmp   r24, r13, r3          ; ¿hemos llegado al final del texto?
+    bb1   ge, r24, fin_bucle     ; Si r13 >= longitudTexto, salir
+
+    ; --- Guardar registros importantes antes de llamar a BuscaMax ---
+    PUSH(r24)
+    PUSH(r13)                    ; Dirección del texto original
+    PUSH(r3)                    ; Índice en texto
+    PUSH(r27)                    ; Índice en zona3
+    PUSH(r28)                    ; Número de bit en mapa de bits
+    PUSH(r24)                    ; Dirección de zona3
+    PUSH(r9)                    ; Dirección del mapa de bits
+
+    ; --- Preparar parámetros para BuscaMax ---
+    subu  r30, r30, 4            ; Reserva espacio para jj
+    or    r26, r30, r0           ; r26 = dirección local para jj
+    PUSH(r26)                    ; jj = dirección donde se guardará P
+    PUSH(r13)                    ; max = posición actual
+    PUSH(r10)                    ; ref = dirección del texto original
+    bsr   BuscaMax               ; Llamada a la subrutina
+    POP(r10)                     ; Recupera dir texto original
+    POP(r13)                     ; Recupera posición actual
+    POP(r26)                     ; Recupera *jj
+
+    ; --- Recuperar registros importantes ---
+    POP(r12)
+    POP(r16)
+    POP(r15)
+    POP(r14)
+    POP(r13)
+    POP(r10)
+    POP(r9)
+    ; --- Procesar resultados de BuscaMax ---
+    or    r27, r29, r0           ; r27 = L (longitud subcadena)
+    ld    r28, r26, 0            ; r28 = P (posición previa)
+
+    ; --- Comprobar si L >= N ---
+    cmp   r24, r27, r9
+    bb1   lt, r24, no_comprime   ; Si L < N, copiar carácter
+
+    ; --- Comprimir por referencia ---
+    ; Guardar registros antes de llamar a PoneBitA1
+    PUSH(r12)
+    PUSH(r15)
+    PUSH(r1)
+    bsr   PoneBitA1              ; Marca el bit correspondiente
+    POP(r1)
+    POP(r15)
+    POP(r12)
+
+    ; Guardar P (2 bytes little-endian) y L (1 byte) en zona3
+    extu  r21, r28, 8<0>         ; byte bajo de P
+    st.bu  r21, r16, r14
+    addu  r14, r14, 1
+    extu  r21, r28, 8<8>         ; byte alto de P
+    st.bu  r21, r16, r14
+    addu  r14, r14, 1
+    ;O no será st.hu r28,r16,r14
+    ;Depende de como este la memoria organizada?
+
+    st.bu  r27, r16, r14          ; longitud L
+    addu  r14, r14, 1
+
+    ; Avanzar índices
+    addu  r13, r13, r27          ; saltar L caracteres en texto
+    addu  r15, r15, 1            ; siguiente bit en mapa de bits
+
+    br    bucle_principal
+
+no_comprime:
+    ; Copiar carácter actual a zona3
+    ld.b  r21, r10, r13
+    st.b  r21, r16, r14
+    addu  r13, r13, 1
+    addu  r14, r14, 1
+    addu  r15, r15, 1
+    br    bucle_principal
+
+fin_bucle:
+    ; --- Escribir la cabecera ---
+    ; Longitud original (2 bytes, little-endian)
+    extu  r24, r23, 8<0>      ; Byte bajo
+    st.bu r24, r11, 0
+    extu  r24, r3, 8<8>      ; Byte alto
+    st.bu r24, r11, 1
+    ; M (1 en este proyecto)
+    or    r24, r0, 1
+    st.bu r24, r11, 2
+    ; Desplazamiento a zona3: 5 + tamaño mapa de bits
+    addu  r24, r21, 5
+    extu  r25, r24, 8<0>
+    st.bu r25, r11, 3
+    extu  r25, r24, 8<8>
+    st.bu r25, r11, 4
+
+    ; --- Copiar el mapa de bits ---
+    ; r12 = inicio mapa de bits, r21 = número de bytes
+    or    r24, r0, 0
+copiar_mapabits:
+    cmp   r25, r24, r21
+    bb1   ge, r25, fin_mapabits
+    ld.b  r25, r16, r24        ; OJO: si el mapa de bits está en otra zona, ajusta el origen
+    st.b  r25, r12, r24
+    addu  r24, r24, 1
+    br    copiar_mapabits
+fin_mapabits:
+
+    ; --- Copiar zona3 ---
+    ; r16 = inicio zona3, r14 = longitud usada
+    or    r24, r0, 0
+    addu  r25, r12, r21        ; destino = inicio mapa de bits + tamaño mapa de bits
+copiar_zona3:
+    cmp   r26, r24, r14
+    bb1   ge, r26, fin_zona3
+    ld.b  r27, r16, r24
+    st.b  r27, r25, r24
+    addu  r24, r24, 1
+    br    copiar_zona3
+fin_zona3:
+
+    ; --- Calcular longitud total y devolver ---
+    addu  r2, r14, r21         ; zona3 + mapa de bits
+    addu  r2, r2, 5            ; + cabecera
+    ; r2 ya es el resultado
+
+    ; --- Restaurar contexto y salir ---
+    POP    (r31)
+    POP    (r1)
+    jmp (r1)

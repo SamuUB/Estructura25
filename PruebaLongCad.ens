@@ -1,0 +1,96 @@
+; --------- MACROS ---------
+LEA: MACRO(reg, ETIQ)
+    or reg, r0, low(ETIQ)
+    or.u reg, reg, high(ETIQ)
+ENDMACRO
+
+LOAD: MACRO(reg, ETIQ)
+    LEA(reg, ETIQ)
+    ld reg, r0, reg
+ENDMACRO
+
+PUSH: MACRO(ra)
+    subu r30, r30, 4
+    st ra, r30, 0
+ENDMACRO
+
+POP: MACRO(ra)
+    ld ra, r30, 0
+    addu r30, r30, 4
+ENDMACRO 
+
+org 0x1000
+ppal:
+    LEA(r30, 0xF000)       ; Inicializar pila
+
+    ; --- Test cadena1 ---
+    LEA(r10, cadena1)
+    PUSH(r10)
+    bsr LongCad
+    addu r30, r30, 4
+    or r11, r29, r0        ; Correcto => r11 = 5
+
+    ; --- Test cadena2 ---
+    LEA(r10, cadena2)
+    PUSH(r10)
+    bsr LongCad
+    addu r30, r30, 4
+    or r12, r29, r0        ; Correcto => r12 = 10 (0x0A)
+
+    ; --- Test cadena3 ---
+    LEA(r10, cadena3)
+    PUSH(r10)
+    bsr LongCad
+    addu r30, r30, 4
+    or r13, r29, r0        ; Correcto => r13 = 0
+
+    ; --- Test cadena4 ---
+    LEA(r10, cadena4)
+    PUSH(r10)
+    bsr LongCad
+    addu r30, r30, 4
+    or r14, r29, r0        ; Correcto => r14 = 12 (0x0C)
+
+    ; --- Test cadena5 ---
+    LEA(r10, cadena5)
+    PUSH(r10)
+    bsr LongCad
+    addu r30, r30, 4
+    or r15, r29, r0        ; Correcto => r15 = 1
+
+    stop
+
+LongCad:
+    ; LongCad (cadena)
+    ; r10 = *cadena (dirección de inicio)
+    ; r3  = caracteres que se van leyendo de la cadena
+    ; r7  = comparación con 0 (detecta fin de cadena)
+    ; r29 = contador de longitud (valor de retorno)
+
+
+    PUSH(r1)          ; Guardar dirección de retorno
+    PUSH(r31)
+    or r31,r30,r0
+    ld r10,r31,8; Cargar dirección de la cadena (parámetro)
+    or r29, r0, r0    ; Inicializar contador en 0 (ignorar valor inicial)
+
+bucle_longcad:
+    ld.bu r3, r10, 0   ; Cargar byte (carácter)
+    cmp r7, r3, r0
+    bb1 eq, r7, fin_longcad  ; Si es 0, fin de cadena
+    addu r29, r29, 1  ; Incrementar contador
+    addu r10, r10, 1    ; Avanzar al siguiente carácter
+    br bucle_longcad  ; Repetir
+
+fin_longcad:
+    or r30,r31,0
+    POP(r31)
+    POP(r1)           ; Restaurar dirección de retorno
+    jmp(r1)           ; Volver a la rutina llamante
+
+org 0xB000
+cadena1: data "01234\0"
+cadena2: data "Hola mundo\0"   ; Longitud esperada: 10
+cadena3: data "\0"             ; Longitud esperada: 0
+cadena4: data "ABCDEF123456\0" ; Longitud esperada: 12
+cadena5: data " \0"            ; Longitud esperada: 1

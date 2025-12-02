@@ -1,0 +1,125 @@
+; --------- MACROS ---------
+LEA: MACRO(reg, ETIQ)
+    or reg, r0, low(ETIQ)
+    or.u reg, reg, high(ETIQ)
+ENDMACRO
+
+LOAD: MACRO(reg, ETIQ)
+    LEA(reg, ETIQ)
+    ld reg, r0, reg
+ENDMACRO
+
+PUSH: MACRO(ra)
+    subu r30, r30, 4
+    st ra, r30, 0
+ENDMACRO
+
+POP: MACRO(ra)
+    ld ra, r30, 0
+    addu r30, r30, 4
+ENDMACRO
+
+org 0x1000
+ppal:
+    LEA(r30, 0xF000)       ; Inicializar pila
+
+    ; Test 1: cadena1 vs cadena2 => r11 = 5
+    LEA(r10, cadena1)
+    PUSH(r10)
+    LEA(r10, cadena2)
+    PUSH(r10)
+    bsr CoincidenCad
+    addu r30, r30, 8
+    or r20, r29, r0
+
+    ; Test 2: cadena1 vs cadena3 => r12 = 4
+    LEA(r10, cadena1)
+    PUSH(r10)
+    LEA(r10, cadena3)
+    PUSH(r10)
+    bsr CoincidenCad
+    addu r30, r30, 8
+    or r21, r29, r0
+
+    ; Test 3: cadena1 vs cadena4 => r13 = 0
+    LEA(r10, cadena1)
+    PUSH(r10)
+    LEA(r10, cadena4)
+    PUSH(r10)
+    bsr CoincidenCad
+    addu r30, r30, 8
+    or r22, r29, r0
+
+    ; Test 4: cadena5 vs cadena6 => r14 = 16 (0x10)
+    LEA(r10, cadena5)
+    PUSH(r10)
+    LEA(r10, cadena6)
+    PUSH(r10)
+    bsr CoincidenCad
+    addu r30, r30, 8
+    or r23, r29, r0
+
+    ; Test 5: cadena3 vs cadena4 => r15 = 0
+    LEA(r10, cadena3)
+    PUSH(r10)
+    LEA(r10, cadena4)
+    PUSH(r10)
+    bsr CoincidenCad
+    addu r30, r30, 8
+    or r24, r29, r0
+
+    ; Test 6: cadena3 vs cadena7 => r16 = 0
+    LEA(r10, cadena3)
+    PUSH(r10)
+    LEA(r10, cadena7)
+    PUSH(r10)
+    bsr CoincidenCad
+    addu r30, r30, 8
+    or r25, r29, r0
+
+    stop
+
+CoincidenCad:
+    ; CoincidenCad(cadena1, cadena2)
+    ; r10 = *cadena1 (dirección de inicio)
+    ; r11 = *cadena2 (dirección de inicio)
+    ; r3  = caracteres que se van cargando de cadena1
+    ; r4  = caracteres que se van cargando de cadena2
+    ; r7  = Comparaciones (fin cadenas o !(coinciden caracteres))
+    ; r29 = contador de carcateres coincidentes (valor de retorno)
+    
+    PUSH    (r1)
+    PUSH    (r31)
+
+    or      r31, r30, r0        ; Marco de pila
+    ld      r10, r31, 8         ; Cargamos cadena1
+    ld      r11, r31, 12        ; Cargamos cadena2
+    or      r29, r0, r0
+
+    bucle_CC:
+    ld.bu   r3, r10, 0          ; Cargamos byte de cadena 1(Car1)
+    ld.bu   r4, r11, 0          ; Cargamos byte de cadena 2(Car1)
+    cmp     r7, r3, r0          ; Comprobamos si final cadena 1
+    bb1     eq, r7, fin_CC      ; Si Car1 = null => fin_CC
+    cmp     r7, r4, r0          ; Comprobamos si final cadena 2
+    bb1     eq, r7, fin_CC      ; Si Car2 = null => fin_CC
+    cmp     r7, r3, r4          ; Comprobamos Car1 = Car2
+    bb1     ne, r7, fin_CC      ; Si Car1 != Car2 => fin_CC
+    addu    r29, r29, 1         ; Si todo correcto aumentamos en 1 el contador
+    addu    r10, r10, 1         ; *r10 = siguiente carácter de cadena 1
+    addu    r11, r11, 1         ; *r11 = siguiente carácter de cadena 2
+    br      bucle_CC
+
+    fin_CC:
+    POP     (r31)
+    POP     (r1)
+    jmp     (r1)
+
+org 0xB000
+cadena1: data "Hola mundo\0"
+cadena2: data "Hola Miguel\0"     
+cadena3: data "Hola\0"
+cadena4: data "Adios\0"           
+cadena5: data "Hola mundo cruel\0"
+cadena6: data "Hola mundo cruel\0" 
+cadena7: data "\0H"

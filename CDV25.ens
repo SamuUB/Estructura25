@@ -1,0 +1,522 @@
+; Autor: Samuel Muñoz-Guerra Gómez
+; --------- MACROS ---------
+LEA: MACRO(reg, ETIQ)
+    or reg, r0, low(ETIQ)
+    or.u reg, reg, high(ETIQ)
+ENDMACRO
+
+LOAD: MACRO(reg, ETIQ)
+    LEA(reg, ETIQ)
+    ld reg, r0, reg
+ENDMACRO
+
+PUSH: MACRO(ra)
+    subu r30, r30, 4
+    st ra, r30, 0
+ENDMACRO
+
+POP: MACRO(ra)
+    ld ra, r30, 0
+    addu r30, r30, 4
+ENDMACRO
+
+org 0x1000
+ppal: 
+    LEA(r30, 0xF000)                                ; Inicializar puntero de pila (r30 = 0xF000)
+BancoPruebasPBA1:
+    ; --- Test 1: Activar bit 0 
+    LEA(r10, campoBits)                             ; Cargar dir de campoBits en r10
+    or r11, r0, 0                                   ; Poner 0 en r11 (NumBit = 0)
+    PUSH(r10)                                       ; Empujar parámetro dirZonaCB
+    PUSH(r11)                                       ; Empujar parámetro NumBit
+    bsr PoneBitA1                                   ; Llamar a rutina PoneBitA1
+    addu r30, r30, 8                                ; Limpiar parámetros de la pila (8 bytes)
+    ld.bu r20, r10, r0                              ; Leer byte 0 de campoBits (esperado 0x80)
+    or r11,r0,0x80
+    cmp r7,r11,r20
+    bb1 ne,r7,noigualesPBA1
+    addu r27,r27,1
+    noigualesPBA1:
+
+    ; --- Test 2: Activar bit 10
+    LEA(r10, campoBits)                             ; Cargar dir de campoBits en r10
+    or r11, r0, 10                                  ; Poner 10 en r11 (NumBit = 10)
+    PUSH(r10)                                       ; Empujar dirZonaCB
+    PUSH(r11)                                       ; Empujar NumBit
+    bsr PoneBitA1                                   ; Llamar a rutina PoneBitA1
+    addu r30, r30, 8                                ; Limpiar parámetros de la pila
+    ld.bu r21, r10, 1                               ; Leer byte 1 de campoBits (esperado 0x20)
+    or r11,r0,0x20                                  ;Comprobar resultado correcto
+    cmp r7,r11,r21
+    bb1 ne,r7,noigualesPBA12
+    addu r27,r27,1                                  ; Si iguales => Contador + 1
+    noigualesPBA12:
+
+    ; --- Test 3: Activar bit 15
+    LEA(r10, campoBits)                             ; Cargar dir de campoBits en r10
+    or r11, r0, 15                                  ; Poner 15 en r11 (NumBit = 15)
+    PUSH(r10)                                       ; Empujar dirZonaCB
+    PUSH(r11)                                       ; Empujar NumBit
+    bsr PoneBitA1                                   ; Llamar a rutina PoneBitA1
+    addu r30, r30, 8                                ; Limpiar parámetros de la pila
+    ld.bu r22, r10, 1                                  ; Leer byte 1 de campoBits (esperado 0x21)
+    or r11,r0,0x21
+    cmp r7,r11,r22
+    bb1 ne,r7,noigualesPBA13
+    addu r27,r27,1
+    noigualesPBA13:
+
+    ; --- Test 4: Activar bit 63
+    LEA(r10, campoBits)                             ; Cargar dir de campoBits en r10
+    or r11, r0, 63                                  ; Poner 63 en r11 (NumBit = 63)
+    PUSH(r10)                                       ; Empujar dirZonaCB
+    PUSH(r11)                                       ; Empujar NumBit
+    bsr PoneBitA1                                   ; Llamar a rutina PoneBitA1
+    addu r30, r30, 8                                ; Limpiar parámetros de la pila
+    ld.bu r23, r10, 7                               ; Leer byte 7 de campoBits (esperado 0x01)
+    or r11,r0,0x01
+    cmp r7,r11,r23
+    bb1 ne,r7,noigualesPBA14
+    addu r27,r27,1
+    noigualesPBA14:
+    or r0,r0,r0
+    
+BancoPruebasBC:
+    ; --- Test 1: buscarBC 'o' en cadena1BC desde 0 hasta 10 => esperado: 1
+    LEA(r10,buscarBC)
+    PUSH(r10)              ; C
+    LEA(r10, cadena1BC)
+    PUSH(r10)              ; ref
+    or r10, r0, 0
+    PUSH(r10)              ; from
+    or r10, r0, 10
+    PUSH(r10)              ; to
+    bsr BuscaCar
+    addu r30, r30, 16
+    or r11, r29, r0
+    or r10,r0,1
+    cmp r7,r11,r10
+    bb1 ne,r7,noigualesBC1
+    addu r27,r27,0x01
+    noigualesBC1:
+
+    ; --- Test 2: buscarBC 'm' en cadena1BC desde 0 hasta 10 => esperado: 5
+    LEA(r10,buscarBC2)
+    PUSH(r10)
+    LEA(r10, cadena1BC)
+    PUSH(r10)
+    or r10, r0, 0
+    PUSH(r10)
+    or r10, r0, 10
+    PUSH(r10)
+    bsr BuscaCar
+    addu r30, r30, 16
+    or r12, r29, r0
+    or r10,r0,0x05
+    cmp r7,r12,r10
+    bb1 ne,r7,noigualesBC2
+    addu r27,r27,1
+    noigualesBC2:
+    
+
+    ; --- Test 3: buscarBC 'z' en cadena1BC desde 0 hasta 10 => esperado: 10 (no encontrado)
+    LEA(r10,buscarBC3)
+    PUSH(r10)
+    LEA(r10, cadena1BC)
+    PUSH(r10)
+    or r10, r0, 0
+    PUSH(r10)
+    or r10, r0, 10
+    PUSH(r10)
+    bsr BuscaCar
+    addu r30, r30, 16
+    or r13, r29, r0
+    or r10,r0,0x0A
+    cmp r7,r13,r10
+    bb1 ne,r7,noigualesBC3
+    addu r27,r27,1
+    noigualesBC3:
+    
+
+    ; --- Test 4: buscarBC 'c' en cadena1BC desde 10 hasta 16 => esperado: 11
+    LEA(r10,buscarBC4)
+    PUSH(r10)
+    LEA(r10, cadena1BC)
+    PUSH(r10)
+    or r10, r0, 10
+    PUSH(r10)
+    or r10, r0, 16
+    PUSH(r10)
+    bsr BuscaCar
+    addu r30, r30, 16
+    or r14, r29, r0
+    or r10,r0,0x0B
+    cmp r7,r14,r10
+    bb1 ne,r7,noigualesBC4
+    addu r27,r27,1
+    noigualesBC4:
+    
+
+    ; --- Test 5: buscarBC 'H' en cadena1BC desde 0 hasta 5 => esperado: 0
+    LEA(r10,buscarBC5)
+    PUSH(r10)
+    LEA(r10, cadena1BC)
+    PUSH(r10)
+    or r10, r0, 0
+    PUSH(r10)
+    or r10, r0, 5
+    PUSH(r10)
+    bsr BuscaCar
+    addu r30, r30, 16
+    or r15, r29, r0
+    or r10,r0,r0
+    cmp r7,r15,r10
+    bb1 ne,r7,noigualesBC5
+    addu r27,r27,1
+    noigualesBC5:
+    
+
+    ; --- Test 6: To = from => esperado: 0
+    LEA(r10,buscarBC5)
+    PUSH(r10)
+    LEA(r10, cadena1BC)
+    PUSH(r10)
+    or r10, r0, 0
+    PUSH(r10)
+    or r10, r0, 0
+    PUSH(r10)
+    bsr BuscaCar
+    addu r16,r16,1
+    addu r30, r30, 16
+    or r16, r29, r0
+    or r10,r0,0x00
+    cmp r7,r16,r10
+    bb1 ne,r7,noigualesBC6
+    addu r27,r27,1
+    noigualesBC6:
+    or r0,r0,r0
+
+finPPAL:
+    stop                                            ; Detener ejecución
+
+
+PoneBitA1:                                          
+    ; PoneBitA1(dirZonaCB, NumBit)
+    ; r10 = dirZonaCB (dir del campo de bits)
+    ; r11 = NumBit (numero bit a activar)
+    ; r12 = byteOffset
+    ; r18 = 8 × byteOffset (para calcular posicion bit dentro del byte)
+    ; r13 = posición del bit dentro del byte (de 7 a 0)
+    ; r14 = constante 7 
+    ; r3  = mascara con el bit deseado activado
+    ; r4  = constante 2 (para desplazar máscara)
+    ; r7  = registro para comparaciones
+    ; r16 = dir del byte a modificar (dirZonaCB + byteOffset)
+    ; r17 = contenido del byte leido y despues actualizado
+
+    PUSH    (r1)                                    
+    PUSH    (r31)                                   
+    or      r31, r30, r0                             ; Marco de pila
+
+    ; Cargar parámetros
+    ld      r10, r31, 8                              ; r10 = dirZonaCB
+    ld      r11, r31, 12                             ; r11 = NumBit         
+
+    ; byteOffset 
+    divs     r12, r11, 8                            ; r12 = NumBit / 8      
+
+    ; Obtener NumBit dentro del byte correspondiente
+    or r18,r0,8
+    mulu r18,r18,r12                                                        
+    subu r13,r11,r18                                                        
+    or r14, r0, 7                                   ; r14 = 7
+    subu r13, r14, r13                              ; r13 = 7 - r13 => posición de bit en el byte
+
+    ; Preparar mascara
+    or r3,r0,1                                      ;r3 = 1
+    or r4,r0,2                                      ;r4 = 2
+
+    BuclePBA1:
+    cmp r7,r13,r0                                   ; Comprobamos si estamos en NumBit
+    bb1 eq,r7,PBA1                                  ; Si estamos => PBA1 
+    muls r3,r4,r3                                   ; Desplazamos r3 un bit a la izqda
+    subu r13,r13,1                                  ; Decrementamos contador de NumBit
+    br BuclePBA1                                    
+    
+    ; Leer byte actual, modificarlo y almacenarlo
+    PBA1:
+    ld.b r17, r10, r12                              ; r17 = contenido byte actual (lectura)
+
+    or r17, r17, r3                                 ; r17 = byte actualizado  (poner el bit r11 a 1)
+    st.b r17, r10, r12                                ; Escribir byte modificado en memoria
+
+    ; Restaurar pila y retornar
+    POP(r31)
+    POP(r1)
+    jmp (r1)                                        ; Retorno
+BuscaCar:
+    ; BuscaCar (C,ref,from, to)
+    ; Registros usados:
+    ; r3  = C (caracter a buscar)
+    ; r4  = ref (direccion de la cadena)
+    ; r5  = from (posicion inicial)
+    ; r6  = to (posicion final o tope)
+    ; r7  = registro de comparación
+    ; r29  = puntero al índice actual
+    ; r9  = dirección ref[from + i]
+    ; r10 = caracteres que se van leyendo de la cadena
+    ; r29 = valor de retorno (posición encontrada o to)
+
+    PUSH(r1)
+    PUSH(r31)
+
+    or      r31, r30, r0           ; Marco de pila
+    ld      r3, r31, 8        ; C <= carácter a buscar
+    ld      r4, r31, 12       ; ref <= dirección de cadena
+    ld      r5, r31, 16       ; from <= inicio
+    ld      r6, r31, 20       ; to <= fin
+
+    or      r29, r5, r0        ; índice actual = from
+
+bucle_BC:
+    cmp     r7, r29, r6          ; ¿hemos llegado a to?
+    bb1     eq, r7, fin_BC      ; Si hemos llegado => fin_BC
+    ld.bu   r10, r4, r29          ; r10 <= carácter actual
+    cmp     r7, r10, r3         ; ¿carácter actual == C?
+    bb1     eq, r7, fin_BC
+    addu    r29, r29, 1           ; avanzar índice
+    br      bucle_BC
+
+fin_BC:
+    POP(r31)
+    POP(r1)
+    jmp(r1)
+LongCad:
+    ; LongCad (cadena)
+    ; r10 = *cadena (dir de inicio)
+    ; r3  = caracteres que se van leyendo de la cadena
+    ; r7  = comparación con 0 (detecta fin de cadena)
+    ; r29 = contador de longitud (valor de retorno)
+    
+    PUSH    (r1)                    
+    PUSH    (r31)
+    or      r31,r30,r0                  ; Marco de pila
+    ld      r10,r31,8                   ; Cargar dir de la cadena
+    or      r29, r0, r0                 ; Inicializar contador en 0
+
+    bucle_longcad:
+    ld.bu   r3, r10, 0                  ; Cargar byte (carácter)
+    cmp     r7, r3, r0
+    bb1     eq, r7, fin_longcad         ; Si es 0, fin de cadena
+    addu    r29, r29, 1                 ; Incrementar contador
+    addu    r10, r10, 1                 ; Avanzar al siguiente carácter
+    br      bucle_longcad               ; Repetir
+
+    fin_longcad:
+    or      r30,r31,0
+    POP     (r31)
+    POP     (r1)                        ; Restaurar dir de retorno
+    jmp     (r1)                        ; Volver a la rutina llamante
+CoincidenCad:
+    ; CoincidenCad(cadena1, cadena2)
+    ; r10 = *cadena1 (dir de inicio)
+    ; r11 = *cadena2 (dir de inicio)
+    ; r3  = caracteres que se van cargando de cadena1
+    ; r4  = caracteres que se van cargando de cadena2
+    ; r7  = Comparaciones (fin cadenas o !(coinciden caracteres))
+    ; r29 = contador de carcateres coincidentes (valor de retorno)
+    
+    PUSH    (r1)
+    PUSH    (r31)
+
+    or      r31, r30, r0                ; Marco de pila
+    ld      r10, r31, 8                 ; Cargamos cadena1
+    ld      r11, r31, 12                ; Cargamos cadena2
+    or      r29, r0, r0                 ; Inicializamos contador
+
+    bucle_CC:
+    ld.bu   r3, r10, 0                  ; Cargamos byte de cadena 1(Car1)
+    ld.bu   r4, r11, 0                  ; Cargamos byte de cadena 2(Car1)
+    cmp     r5, r3, r0                  ; Comprobamos si final cadena 1
+    bb1     eq, r5, fin_CC              ; Si Car1 = null => fin_CC
+    cmp     r6, r4, r0                  ; Comprobamos si final cadena 2
+    bb1     eq, r6, fin_CC              ; Si Car2 = null => fin_CC
+    cmp     r7, r3, r4                  ; Comprobamos Car1 = Car2
+    bb1     ne, r7, fin_CC              ; Si Car1 != Car2 => fin_CC
+    addu    r29, r29, 1                 ; Si todo correcto aumentamos en 1 el contador
+    addu    r10, r10, 1                 ; *r10 = siguiente carácter de cadena 1
+    addu    r11, r11, 1                 ; *r11 = siguiente carácter de cadena 2
+    br      bucle_CC
+
+    fin_CC:
+    POP     (r31)
+    POP     (r1)
+    jmp     (r1)
+
+Verifica:
+    jmp (r1)
+Comprime:
+    jmp (r1)
+Descomprime:
+    jmp (r1)
+LeeBit:
+    ; Guardar r1 y r31
+    PUSH    (r1)                                    
+    PUSH    (r31)                                   
+    or      r31, r30, r0                             ; Marco de pila
+
+    ; Cargar parámetros
+    ld      r10, r31, 8                              ; r10 = dirZonaCB
+    ld      r11, r31, 12                             ; r11 = NumBit
+    or      r29,r0,0         
+
+    ; byteOffset 
+    divs     r12, r11, 8                            ; r12 = NumBit / 8      
+
+    ; Obtener NumBit dentro del byte correspondiente
+    or r18, r0, 8      ; Carga el valor 8 en r18
+
+    mulu r18,r18,r12
+    subu r13,r11,r18                                                                                                                
+    or r14, r0, 7                                   ; r14 = 7
+    subu r13, r14, r13                              ; r13 = 7 - r13 => posición de bit en el byte
+
+    ; Preparar mascara
+    or r3,r0,1                                      ;r3 = 1
+    or r4,r0,2                                      ;r4 = 2
+
+    addu r16, r10, r12                              ; r16 = dirZonaCB + byteOffset (dirección del byte)
+    ld.bu r17, r16, r0                              ; r17 = contenido byte actual (lectura)
+    cmp r7,r17,r0
+    bb1 eq,r7,finLB
+
+
+    ;Desplazar contenido byte a la dcha para dejar el bit x en posicion 0
+    BucleLB1:
+    cmp r7,r13,r0                                   ; Comprobamos si estamos en NumBit
+    bb1 eq,r7,LB2                                   ; Si estamos => PBA1
+    cmp r7,r17,r0
+    bb1 eq,r7,LB2_0 
+    divu r17,r17,r4                                 ; Desplazamos r17 un bit a la dcha
+    subu r13,r13,1                                  ; Decrementamos contador de NumBit
+    br BucleLB1
+
+    LB2_0:
+        or r29,r0,r0
+        br finLB
+    ;Aplicamos mascara
+    LB2:
+    and     r29,r17,r3                              ; Aplicamos mascara y guardamos en r29
+    finLB:
+    ; Restaurar pila y retornar
+    POP(r31)
+    POP(r1)
+    jmp (r1)                                        ; Retorno
+
+org 0xB000                                              ; dir donde se reserva campoBits
+campoBits: data 0x0000000000000000                      ; Reservar 8 bytes para el campo de bits
+cadena1BC: data "Hola mundo cruel\0"
+buscarBC:  data "o"
+buscarBC2: data "m"
+buscarBC3: data "z"
+buscarBC4: data "c"
+buscarBC5: data "H"
+
+;
+; Debe incorporar este fichero con TODAS sus l�neas, sin modificar
+; ninguna de ellas, al final de su archivo CDV24.ens
+;
+; Este aviso se refiere tambi�n a las l�neas de comentario
+; 
+;
+;; Grupo:    s.munoz-guerra - Fri Oct 24 18:41:19 CEST 2025
+
+BuscaMax:
+	PUSH (r1)
+	PUSH (r31)
+	or   r31, r30, 0
+	or   r28, r0, 0x3107
+	PUSH (r28)
+
+	ld   r10, r31, 8;  REF
+	ld   r11, r31, 12; MAX
+	ld   r12, r31, 16; Dir(JJ)
+
+	sub  r5, r0, 1		; guarda -1 en *JJ por si no se
+	st   r5, r12, 0		; encuentran coincidencias
+
+	addu r27, r0, r0  ; P
+	addu r28, r0, r0  ; L
+
+BucBM:
+	ld.bu r20, r10, r11	; C=REF(max)
+
+				; Reserva registros que
+				; necesita conservar
+	PUSH (r28) 	    	; L
+	PUSH (r11)	    	; MAX
+
+	     		    	; Par�metros de BuscaCar
+	PUSH (r27)	    	; P
+	PUSH (r10)	    	; REF
+	PUSH (r20)	   	; C
+	bsr  BuscaCar
+	POP  (r20)
+	POP  (r10)
+	POP  (r27)
+
+	POP  (r11)		; Recupera registros
+	POP  (r28)	        ; salvaguardados
+
+	cmp  r5, r29, r11	; nuevo P es >= MAX ??
+	bb1  hs, r5, finBM
+	addu r27, r29, r0	; P = nuevo P
+	
+	addu r13, r10, r27	; *REF(P)
+	addu r14, r10, r11 	; *REF(max)	
+
+	PUSH (r11)     		; Reserva registros que
+	PUSH (r10)		; necesita conservar
+	PUSH (r28)
+	PUSH (r27)
+	
+	PUSH (r14)		; Par�metros de CoincidenCad
+	PUSH (r13)
+	bsr  CoincidenCad
+	POP  (r13)
+	POP  (r14)
+	
+	POP  (r27)		; Recupera registros
+	POP  (r28)		; salvaguardados
+	POP  (r10)
+	POP  (r11)
+
+	cmp r5, r29, r28	; Comprueba si longitud > L
+	bb1 le, r5, contBM	; Si no lo es, contin�a
+	cmp r5, r29, 255	; Comprueba si longitud > 255
+	bb1 le, r5, noLimBM	; Si no lo es, contin�a
+	addu r29, r0, 255	; Si lo es, limita su valor a 255
+	
+noLimBM:
+	addu r28, r29, r0	; actualiza L
+	ld   r12, r31, 16	; Dir(JJ)
+	st   r27, r12, r0	; actualiza P en *JJ
+	bb1 ge, r5, finBM	; Si coincidencia >= 255 termina
+contBM: 
+	addu r27, r27, 1	; Pasa al siguiente car�cter
+	cmp  r5, r27, r11	; Es P>=max ?
+	bb1  hs, r5, finBM
+	
+	br   BucBM   		; Nueva b�squeda del primer car�cter
+
+finBM:
+	addu r29, r28, r0	; asigna L al valor de retorno r29
+	  
+	or   r27, r0, 0x66E
+	POP  (r28)
+
+	or   r30, r31, 0
+	POP  (r31)
+	POP  (r1)
+	jmp  (r1)
+;; Grupo:    s.munoz-guerra

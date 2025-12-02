@@ -1,0 +1,204 @@
+; --------- MACROS ---------
+LEA: MACRO(reg, ETIQ)
+    or reg, r0, low(ETIQ)
+    or.u reg, reg, high(ETIQ)
+ENDMACRO
+
+LOAD: MACRO(reg, ETIQ)
+    LEA(reg, ETIQ)
+    ld reg, r0, reg
+ENDMACRO
+
+PUSH: MACRO(ra)
+    subu r30, r30, 4
+    st ra, r30, 0
+ENDMACRO
+
+POP: MACRO(ra)
+    ld ra, r30, 0
+    addu r30, r30, 4
+ENDMACRO
+
+org 0x1000
+ppal:
+    LEA(r30, 0xF000)       ; Inicializar pila
+
+    ; --- Test 1: Buscar 'o' en cadena1 desde 0 hasta 10 → esperado: 1
+    or r10, r0, 10
+    PUSH(r10)              ; to
+    or r10, r0, 0
+    PUSH(r10)              ; from
+    LEA(r10, cadena1)
+    PUSH(r10)              ; ref
+    LOAD(r10,buscar)
+p1: PUSH(r10)              ; C
+    bsr BuscaCar
+p1f:addu r30, r30, 16
+    or r11, r29, r0
+    or r10,r0,1
+    cmp r7,r11,r10
+    bb1 ne,r7,noigualesBC1
+    addu r27,r27,0x01
+noigualesBC1:
+
+    ; --- Test 2: Buscar 'm' en cadena1 desde 0 hasta 10 → esperado: 5
+    or r10, r0, 10
+    PUSH(r10)
+    or r10, r0, 0
+    PUSH(r10)
+    LEA(r10, cadena1)
+    PUSH(r10)
+    LOAD(r10,buscar2)
+p2: PUSH(r10)
+    bsr BuscaCar
+p2f:addu r30, r30, 16
+    or r12, r29, r0
+    or r10,r0,0x05
+    cmp r7,r12,r10
+    bb1 ne,r7,noigualesBC2
+    addu r27,r27,1
+noigualesBC2:
+
+    ; --- Test 3: Buscar 'z' en cadena1 desde 0 hasta 10 → esperado: 10 (no encontrado)
+    or r10, r0, 10
+    PUSH(r10)
+    or r10, r0, 0
+    PUSH(r10)
+    LEA(r10, cadena1)
+    PUSH(r10)
+    LOAD(r10,buscar3)
+p3: PUSH(r10)
+    bsr BuscaCar
+p3f:addu r30, r30, 16
+    or r13, r29, r0
+    or r10,r0,0x0A
+    cmp r7,r13,r10
+    bb1 ne,r7,noigualesBC3
+    addu r27,r27,1
+noigualesBC3:
+
+    ; --- Test 4: Buscar 'c' en cadena1 desde 10 hasta 16 → esperado: 11
+    or r10, r0, 16
+    PUSH(r10)
+    or r10, r0, 10
+    PUSH(r10)
+    LEA(r10, cadena1)
+    PUSH(r10)
+    LOAD(r10,buscar4)
+p4: PUSH(r10)
+    bsr BuscaCar
+p4f:addu r30, r30, 16
+    or r14, r29, r0
+    or r10,r0,0x0B
+    cmp r7,r14,r10
+    bb1 ne,r7,noigualesBC4
+    addu r27,r27,1
+noigualesBC4:
+
+    ; --- Test 5: Buscar 'H' en cadena1 desde 0 hasta 5 → esperado: 0
+    or r10, r0, 5
+    PUSH(r10)
+    or r10, r0, 0
+    PUSH(r10)
+    LEA(r10, cadena1)
+    PUSH(r10)
+    LOAD(r10,buscar5)
+p5: PUSH(r10)
+    bsr BuscaCar
+p5f:addu r30, r30, 16
+    or r15, r29, r0
+    or r10,r0,r0
+    cmp r7,r15,r10
+    bb1 ne,r7,noigualesBC5
+    addu r27,r27,1
+noigualesBC5:
+    
+
+    ; --- Test 6: To = from => esperado: 0
+    or r10, r0, 0
+    PUSH(r10)
+    or r10, r0, 0
+    PUSH(r10)
+    LEA(r10, cadena1)
+    PUSH(r10)
+    LOAD(r10,buscar5)
+p6: PUSH(r10)
+    bsr BuscaCar
+p6f:addu r16,r16,1
+    addu r30, r30, 16
+    or r16, r29, r0
+    or r10,r0,0x00
+    cmp r7,r16,r10
+    bb1 ne,r7,noigualesBC6
+    addu r27,r27,1
+noigualesBC6:
+
+;pruebaProfes:
+    LOAD (r11, C) ; or r11, r0, 0x5F ; igual a "_"
+    LEA (r10, REF)
+    LOAD (r12, from) ; or r12, r0, 4
+    LOAD (r13, to) ; or r13, r0, 25
+    PUSH (r13) ; to
+    PUSH (r12) ; from
+    PUSH (r10) ; REF
+    PUSH (r11) ; C
+    bsr BuscaCar
+    ret: addu r30, r30, 16
+    or r17, r29, r0
+    or r10,r0,0x14
+    cmp r7,r17,r10
+    bb1 ne,r7,noigualesBC7
+    addu r27,r27,1
+noigualesBC7:
+    stop
+
+
+BuscaCar:
+    ; BuscaCar (C,ref,from, to)
+    ; Registros usados:
+    ; r3  = C (caracter a buscar)
+    ; r4  = ref (direccion de la cadena)
+    ; r5  = from (posicion inicial)
+    ; r6  = to (posicion final o tope)
+    ; r7  = registro de comparación
+    ; r29  = puntero al índice actual
+    ; r9  = dirección ref[from + i]
+    ; r10 = caracteres que se van leyendo de la cadena
+    ; r29 = valor de retorno (posición encontrada o to)
+
+    PUSH(r1)
+    PUSH(r31)
+
+    or      r31, r30, r0           ; Marco de pila
+    ld      r3, r31, 8        ; C <= carácter a buscar
+    ld      r4, r31, 12       ; ref <= dirección de cadena
+    ld      r5, r31, 16       ; from <= inicio
+    ld      r6, r31, 20       ; to <= fin
+
+    or      r29, r5, r0        ; índice actual = from
+
+bucle_BC:
+    cmp     r7, r29, r6          ; ¿hemos llegado a to?
+    bb1     eq, r7, fin_BC      ; Si hemos llegado => fin_BC
+    ld.bu   r10, r4, r29          ; r10 <= carácter actual
+    cmp     r7, r10, r3         ; ¿carácter actual == C?
+    bb1     eq, r7, fin_BC
+    addu    r29, r29, 1           ; avanzar índice
+    br      bucle_BC
+
+fin_BC:
+    POP(r31)
+    POP(r1)
+    jmp(r1)
+
+org 0xB000
+cadena1: data "Hola mundo cruel\0"
+buscar:  data "o"
+buscar2: data "m"
+buscar3: data "z"
+buscar4: data "c"
+buscar5: data "H"
+C: data "_"
+REF: data "AAAABBBBCCCCDDDDEEEE_Fin.__.\0"
+from: data 4
+to: data 25
