@@ -19,13 +19,6 @@ POP: MACRO(ra)
     addu r30, r30, 4
 ENDMACRO
 
-;PREGUNTAR SI SE PUEDE O NO A LOS PROFES
-PUSH3: MACRO(reg1, reg2, reg3)
-    PUSH(reg1)
-    PUSH(reg2)
-    PUSH(reg3)
-ENDMACRO
-
 
     org 0x1000
 ppal:
@@ -67,21 +60,21 @@ Comprime:
     ;   [r31+12] = Dirección del texto comprimido
     ; ============================================================
 
-    ; --- Salvaguarda del contexto ---
     PUSH    (r1)                  ; Guarda dirección de retorno
     PUSH    (r31)                 ; Guarda marco de pila anterior
     or      r31, r30, r0        ; Activa nuevo marco de pila
 
-    ; --- Calcular longitud del texto original ---
+    ;1. Determinar ́a la longitud de la cadena texto llamando a la subrutina LongCad.
     ld      r10, r31, 8         ; r10 = dirección del texto original
-    PUSH    (r10)                 ; Prepara parámetro para LongCad
+    PUSH    (r10)                 
     bsr     LongCad             ; Llama a LongCad → devuelve longitud en r29
     POP     (r10)                  ; Recupera r10 (dirección del texto)
     
     
-    ; --- Inicialización de variables ---
-    ld      r11, r31, 12        ; r11 = dirección del texto comprimido
-    or    r8,  r0, 8          ; r8 = M (número de caracteres sin comprimir: 8)
+    ld    r11, r31, 12        ; r11 = dirección del texto comprimido
+    st.h  r29, r11, 0         ; Guardamos longitud texto original
+    or    r8,  r0, 1          ; r8 = M (número de caracteres sin comprimir: M*8)
+    st    r8, r11, 2          ; Guardamos el valor de M en el tercer byte
     or    r9,  r0, 4          ; r9 = N (longitud mínima para comprimir: 4)
     or    r2,  r0, r0         ; r2 = longitud comprimido (inicialmente 0)
     or    r3, r29,r0          ; r3 = longitud original
@@ -90,9 +83,14 @@ Comprime:
     addu  r12, r11, 5         ; r12 = dirección del mapa de bits (después de cabecera de 5 bytes)
 
     ; --- Calcular tamaño del mapa de bits ---
-    subu  r20, r29, r8        ; r20 = longitudTexto - M*8
-    addu  r21, r20, 7         ; r21 = longitudTexto - M*8 + 7 (para redondear)
-    divu  r21, r21, 8         ; r21 = número de bytes del mapa de bits
+    subu  r20, r29, r8        ; r20 = longitudTexto - M*8 (excluimos explicitamente los bits que siempre son 0)
+    addu  r21, r20, 7         ; r21 = r20 + 7 (para redondear)
+    divu  r21, r21, 8         ; r21 = número de bytes que ocupa el mapa de bits
+    addu  r4, r21, 5          ; Desplazamiento desde v.salida hasta cadena comprimida
+    st.d  r4, r11, 3          ; Guardamos en los bytes 4 y 5 el desplazamiento
+
+    ; Cabecera =    Byte 1 y 2     | Byte 3 | Byte 4 y 5
+    ;            Tam cad original  |   M    | Desp desde v.salida a txto cmprmdo                     
 
     ; --- Reservar espacio para pilaZona3 en la pila ---
     or    r22, r29, r0        ; r22 = longitudTexto (caso peor: sin compresión)
