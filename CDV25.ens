@@ -425,7 +425,11 @@ fin_bucle:
     ; Guardar Tamño de MapaBits en cabecera y calcular dir zona3
     ; --------------------------------------------------------------------------
     ; 1. Escribir Byte Bajo (LSB) en offset 3
-    ld r11, r31, 12
+    ld      r11, r31, 12
+    subu    r4, r3, r4
+    addu    r4, r4, 7
+    divu    r4, r4, 8
+    addu    r4, r4, 5
     st.b    r4, r11, 3
     
     ; 2. Calcular y Escribir Byte Alto (MSB) en offset 4
@@ -435,7 +439,7 @@ fin_bucle:
     
     ; Necesitamos mover Zona3 a continuación del MapaBits para que quede todo contiguo.
     ; Destino = FinMapaBits = r12 + r21
-    addu    r25, r12, r4       ; Dir Destino para Zona3
+    addu    r25, r11, r4        ; Dir Destino para Zona3
     or      r24, r0, r0         ; Contador = 0
 
 copiar_zona3:
