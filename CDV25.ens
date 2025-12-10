@@ -426,20 +426,19 @@ fin_bucle:
     ; --------------------------------------------------------------------------
     ; 1. Escribir Byte Bajo (LSB) en offset 3
     ld      r11, r31, 12
-    subu    r4, r3, r4
-    addu    r4, r4, 7
-    divu    r4, r4, 8
-    addu    r4, r4, 5
-    st.b    r4, r11, 3
+    addu    r15, r15, 7
+    divu    r15, r15, 8
+    addu    r15, r15, 5
+    st.b    r15, r11, 3
     
     ; 2. Calcular y Escribir Byte Alto (MSB) en offset 4
     or      r24, r0, 256        ; Usamos r24 como divisor temporal
-    divu    r24, r4, r24        ; r24 = r4 / 256 (Desplazamiento >> 8)
+    divu    r24, r15, r24        ; r24 = r4 / 256 (Desplazamiento >> 8)
     st.b    r24, r11, 4
     
     ; Necesitamos mover Zona3 a continuación del MapaBits para que quede todo contiguo.
     ; Destino = FinMapaBits = r12 + r21
-    addu    r25, r11, r4        ; Dir Destino para Zona3
+    addu    r25, r11, r15        ; Dir Destino para Zona3
     or      r24, r0, r0         ; Contador = 0
 
 copiar_zona3:
@@ -456,8 +455,6 @@ fin_zona3:
     ; --------------------------------------------------------------------------
     ; 9. CÁLCULO DE RESULTADO Y EPÍLOGO
     ; --------------------------------------------------------------------------
-    addu    r2, r14, r21        ; Long = bytes_zona3 + bytes_mapa
-    addu    r2, r2, 5           ;        + 5 bytes cabecera
 
     ; Liberar pila (Zona3)
     or      r30, r31, r0        ; Restaurar SP al marco original (libera todo lo allocado)
