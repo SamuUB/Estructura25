@@ -27,7 +27,7 @@ ppal:
 BancoPruebasComprime:
     LEA(r10,comprimido)
     PUSH(r10)
-    LEA(r10,cadena)
+    LEA(r10,cadena1)
     PUSH(r10)
     bsr Comprime
 
@@ -455,7 +455,7 @@ fin_zona3:
     ; --------------------------------------------------------------------------
     ; 9. CÁLCULO DE RESULTADO Y EPÍLOGO
     ; --------------------------------------------------------------------------
-
+    addu    r29,r14,r15
     ; Liberar pila (Zona3)
     or      r30, r31, r0        ; Restaurar SP al marco original (libera todo lo allocado)
     
@@ -618,5 +618,6 @@ finBM:
 ;; Grupo:    s.munoz-guerra
 
 org 0xB000                                              ; dir donde se reserva campoBits
-cadena: data "tres tristes tigres comen trigo en un trigal, el primer tigre que...\0"
+cadena1: data "tres tristes tigres comen trigo en un trigal, el primer tigre que...\0"
+cadena: data "0123456789\0"
 comprimido: data ""
