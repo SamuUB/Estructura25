@@ -24,13 +24,22 @@ org 0x1000
 ppal: 
     LEA(r30, 0xF000)                                ; Inicializar puntero de pila (r30 = 0xF000)
 
-BancoPruebasComprime:
+BancoPruebasDesComprime:
     LEA(r10,comprimido)
     PUSH(r10)
-    LEA(r10,cadena1)
+    LEA(r10,cadena)
     PUSH(r10)
     bsr Comprime
-
+    POP(r10)
+    POP(r10)
+Descomprimidisimo:    
+    LEA(r10,descomprimido)
+    PUSH(r10)
+    LEA(r10,comprimido)
+    PUSH(r10)
+    bsr Descomprime
+    POP(r10)
+    POP(r10)
 finPPAL:
     stop                                            ; Detener ejecución
 
@@ -303,7 +312,7 @@ Comprime:
     ;   1. Copiar caracter de la cadena original
     ; ==========================================================================
 
-bucle_principal:
+    bucle_principal:
     cmp     r7, r13, r3         ; while (i < LongitudOriginal)
     bb1     ge, r7, fin_bucle
 
@@ -397,7 +406,7 @@ bucle_principal:
     
     br      bucle_principal
 
-no_comprime:
+    no_comprime:
     ; Si no comprimimos     =>  Copiamos carcater
     
     ld.bu   r25, r10, r13       ; Cargar char original
@@ -409,7 +418,7 @@ no_comprime:
     
     br      bucle_principal
 
-fin_bucle:    
+    fin_bucle:    
     ; --------------------------------------------------------------------------
     ; 8. Guardamos Tamño de MapaBits en cabecera y calculamos dir zona3
     ; --------------------------------------------------------------------------
@@ -431,7 +440,7 @@ fin_bucle:
     ; 9. Copiamos zona3 en la direccion correspondiente
     ; --------------------------------------------------------------------------
 
-copiar_zona3:
+    copiar_zona3:
     cmp     r7, r24, r14        ; while (contador < longitud_zona3)
     bb1     ge, r7, fin_zona3
     
@@ -440,7 +449,7 @@ copiar_zona3:
     
     addu    r24, r24, 1
     br      copiar_zona3
-fin_zona3:
+    fin_zona3:
 
     ; --------------------------------------------------------------------------
     ; 10. Calculo valor de retorno
@@ -453,7 +462,111 @@ fin_zona3:
     POP     (r1)                ; Restaurar Retorno
     jmp     (r1)                ; Volver a casa
 Descomprime:
+    PUSH    (r1)
+    PUSH    (r31)
+    or      r31, r30, r0                ; Marco de pila
+
+    ld      r10, r31, 8                 ; r10 = comprimido
+    ld      r11, r31, 12                ; r11 = descomprimido
+
+    ld.hu   r2, r10, r0                 ; r2 = longitud texto original
+    ld.bu   r3, r10, 2                  ; r3 = M
+    mulu    r3, r3, 8                   ; r3 = carcateres a copiar sin comprimir
+    
+    ld.bu   r24, r10, 3                 ; r24 = byte en offset 3 (MSB)
+    ld.bu   r25, r10, 4                 ; r25 = byte en offset 4 (LSB)
+    mulu    r25, r25, 256               ; r25 << 8
+    addu    r4, r24, r25                ; r4 = (alto<<8) + bajo  = valor de los bytes 3 y 4
+    addu    r4, r10, r4                 ; r4 = dir_zona3 = *cmprmdo + desplazamiento
+    
+    or      r12, r0, r0                 ; r12 = Indice texto descomprimido
+    or      r13, r0, r0                 ; r13 = Indice MapaBits
+    or      r14, r0, r0                 ; r14 = Indice en zona3
+
+    bucle_copia_desc:
+    cmp     r7, r12, r3
+    bb1     eq, r7, fin_copia_desc
+    ld.bu   r15, r4, r12
+    st.b    r15, r11, r12
+    addu    r12, r12, 1
+    addu    r14, r14, 1
+    br      bucle_copia_desc
+    fin_copia_desc:
+    addu    r3, r10, 5                  ; r3 = *MapaBits
+    
+    bcle_prncp_desc:
+    ld.bu   r15, r4, r14
+    cmp     r7, r15, r0
+    bb1     eq, r7, fin_bucle_desc
+    cmp     r7, r2, r12
+    bb1     eq, r7, fin_bucle_desc
+
+    PUSH    (r2)
+    PUSH    (r4)
+    PUSH    (r10)
+    PUSH    (r11)
+    PUSH    (r12)
+    PUSH    (r14)
+    PUSH    (r15)
+
+    PUSH    (r13)                       ; NumBit
+    PUSH    (r3)                        ; dirZonaCB (*MapaBits)
+    bsr     LeeBit
+    POP     (r3)
+    POP     (r13)
+
+    POP     (r15)
+    POP     (r14)
+    POP     (r12)
+    POP     (r11)
+    POP     (r10)
+    POP     (r4)
+    POP     (r2)
+
+    cmp     r7, r29, 1
+    bb1     eq, r7, bit_activo          ; Bit[r13] = 1 => Hay compresion
+
+    st.b    r15, r11, r12               ; Zona3[r12] => descomprimido[r12]
+
+    addu    r12, r12, 1
+    addu    r13, r13, 1
+    addu    r14, r14, 1
+
+    br      bcle_prncp_desc
+
+    bit_activo:                         ; Bit[r13] = 1 => Hay compresion
+
+    ld.bu   r24, r4, r14                ; r24 = MSB
+    addu    r14, r14, 1
+    ld.bu   r25, r4, r14                ; r25 = LSB
+    mulu    r25, r25, 256               ; r25 << 8
+    addu    r24, r24, r25               ; r24 = (alto<<8) + bajo  = posicion referenciada
+    addu    r14, r14, 1
+    ld.bu   r25, r4, r14                ; r25 = longitud comprimida
+    or      r26, r0, r0
+    addu    r24, r11, r24                ; r24 = descomprimido + referenci
+    
+    bucle_descompresion:
+    cmp     r7, r25, r26
+    bb1     eq, r7, fin_descompresion
+    ld.bu   r15, r24, r26               ; r15 = caracter refrenciado + r26
+    st.b    r15, r11, r12               ; Guardamos caracter
+    addu    r12, r12, 1                 ; Aumentamos indice *descomprimido
+    addu    r26, r26, 1                 ; Aumentamos indice cadena referenciada
+    br bucle_descompresion
+
+    fin_descompresion:
+    addu    r14, r14, 1
+    addu    r13, r13, 1
+    br bcle_prncp_desc
+
+    fin_bucle_desc:
+    st.b   r0, r11, r12
+    or      r29, r12, r0
+
     jmp (r1)
+    
+
 LeeBit:
     ; Guardar r1 y r31
     PUSH    (r1)                                    
@@ -508,6 +621,10 @@ LeeBit:
     POP(r1)
     jmp (r1)                                        ; Retorno
 
+org 0xB000                                              ; dir donde se reserva campoBits
+cadena: data "tres tristes tigres comen trigo en un trigal, el primer tigre que...\0"
+comprimido: data ""
+descomprimido: data ""
 ;
 ; Debe incorporar este fichero con TODAS sus l�neas, sin modificar
 ; ninguna de ellas, al final de su archivo CDV24.ens
@@ -606,8 +723,3 @@ finBM:
 	POP  (r1)
 	jmp  (r1)
 ;; Grupo:    s.munoz-guerra
-
-org 0xB000                                              ; dir donde se reserva campoBits
-cadena1: data "tres tristes tigres comen trigo en un trigal, el primer tigre que...\0"
-cadena: data "0123456789\0"
-comprimido: data ""
