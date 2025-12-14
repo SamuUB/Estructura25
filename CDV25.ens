@@ -22,24 +22,18 @@ ENDMACRO
 
 org 0x1000
 ppal: 
-    LEA(r30, 0xF000)                                ; Inicializar puntero de pila (r30 = 0xF000)
-
-BancoPruebasDesComprime:
-    LEA(r10,comprimido)
-    PUSH(r10)
+    LEA(r30, 0xF000); Inicializar puntero de pila (r30 = 0xF000)
+    or r31, r30, r0
     LEA(r10,cadena)
+    LEA(r11,Long1)
+    LEA(r12,Long2)
+    PUSH(r12)
+    PUSH(r11)
     PUSH(r10)
-    bsr Comprime
+    bsr Verifica
     POP(r10)
-    POP(r10)
-Descomprimidisimo:    
-    LEA(r10,descomprimido)
-    PUSH(r10)
-    LEA(r10,comprimido)
-    PUSH(r10)
-    bsr Descomprime
-    POP(r10)
-    POP(r10)
+    POP(r11)
+    POP(r12)
 finPPAL:
     stop                                            ; Detener ejecución
 
@@ -198,7 +192,117 @@ CoincidenCad:
     jmp     (r1)
 
 Verifica:
-    jmp (r1)
+    PUSH    (r1)
+    PUSH    (r31)
+    or      r31, r30, r0
+
+    ld      r10, r31, 8                             ; Cadena original
+    ld      r11, r31, 12                            ; Long1
+    ld      r12, r31, 16                            ; Long2
+
+    PUSH    (r11)
+    PUSH    (r12)
+    PUSH    (r10)
+
+    bsr LongCad
+
+    POP     (r10)
+    POP     (r11)
+    POP     (r12)
+
+    st      r29, r11, r0                            ; Guardamos longitud del texto original
+    or      r3, r29, r0
+
+ZonaPilaComprimido:
+    addu    r15, r29, 7                             ; r15 = Longitud + 7
+    divu    r15, r15, 8                             ; r15/8 => bytes del mapa de bits
+    subu    r15, r15, 1
+    addu    r15, r15, 5                             ; r15 = MapaBits + cabecera
+    addu    r15, r15, r29                           ; r15 = Cabecera + MapaBits + No_compresion
+    
+    and     r23, r15, 3                             ; Aplicamos máscara (Es el resto de la division entre 4)
+    cmp     r7, r23, r0                             ; r23 = 0 => r23 multiplo de 4
+    bb1     eq, r7, tam_ok
+    
+    subu    r15, r15, r23                           ; r15 = Anterior multiplo de 4
+    addu    r15, r15, 4                             ; Sumo 4 para redondear a la alza
+    tam_ok:
+    subu    r30, r30, r15                           ; Reservamos el Tamño acorde al peor caso (no hay compresion)
+    or      r15, r30, r0                            ; r15 = *Comprimido
+
+ZonaPilaDescomporimido:
+    or      r16, r29, r0
+    and     r23, r16, 3                             ; Aplicamos máscara (Es el resto de la division entre 4)
+    cmp     r7, r23, r0                             ; r23 = 0 => r23 multiplo de 4
+    bb1     eq, r7, tamDesc_ok
+    
+    subu    r16, r29, r23                           ; r15 = Anterior multiplo de 4
+    addu    r16, r16, 4                             ; Sumo 4 para redondear a la alza
+    tamDesc_ok:
+    subu    r30, r30, r16                           ; Reservamos el Tamño acorde al peor caso (no hay compresion)
+    or      r16, r30, r0                            ; r16 = *Descomprimido
+    
+    Comprimimos:
+    PUSH    (r3)
+    PUSH    (r11)
+    PUSH    (r12)
+    PUSH    (r16)
+    
+    PUSH    (r15)                                   ; *comprimido
+    PUSH    (r10)                                   ; *cadena original
+    bsr     Comprime
+    POP     (r10)
+    POP     (r15)
+
+    POP     (r16)
+    POP     (r12)
+    POP     (r11)
+    POP     (r3)
+
+    Descomprimimos:
+
+    PUSH    (r3)
+    PUSH    (r12)
+    PUSH    (r11)
+    PUSH    (r10)
+    PUSH    (r16)
+    PUSH    (r15)
+    bsr     Descomprime
+    POP     (r15)
+    POP     (r16)
+    POP     (r10)
+    POP     (r11)
+    POP     (r12)
+    POP     (r3)
+    or      r4, r29, r0
+    st      r29, r12, r0
+    or      r29, r0, r0
+    cmp     r7, r4, r3
+    bb1     eq, r7, iguales_Verif
+    sub      r29, r29, 1
+    br      fin_Verifica    
+    iguales_Verif:
+    PUSH(r3)
+    PUSH(r10)
+    PUSH(r16)
+    bsr CoincidenCad
+    POP(r16)
+    POP(r10)
+    POP(r3)
+    cmp     r7,r3,r29
+    bb1     eq,r7,todo_ok
+coinciden_cadenas:
+    or      r29, r0, r0
+    sub      r29, r29, -2
+    br      fin_Verifica
+    todo_ok:
+    or      r29, r0, r0
+    fin_Verifica:
+    or r30, r31, r0
+    POP     (r31)
+    POP     (r1)
+    jmp     (r1)
+
 Comprime:
     ; ==============================================================================
     ; SUBRUTINA: Comprime
@@ -450,15 +554,14 @@ Comprime:
     addu    r24, r24, 1
     br      copiar_zona3
     fin_zona3:
-
     ; --------------------------------------------------------------------------
     ; 10. Calculo valor de retorno
     ; --------------------------------------------------------------------------
     addu    r29,r14,r15         ; r29 = Tamño cadena comprimida (Cabecera y Mapa Bits incluidos)
-    ; Liberar pila (Zona3)
-    or      r30, r31, r0        ; Restaurar SP al marco original (libera todo lo allocado)
     
+    or      r30, r31, r0        ; Restaurar SP al marco original
     POP     (r31)               ; Restaurar Frame Pointer anterio
+     
     POP     (r1)                ; Restaurar Retorno
     jmp     (r1)                ; Volver a casa
 Descomprime:
@@ -562,8 +665,10 @@ Descomprime:
 
     fin_bucle_desc:
     st.b   r0, r11, r12
-    or      r29, r12, r0
+    or     r29, r12, r0
 
+    POP(r31)
+    POP(r1)
     jmp (r1)
     
 
@@ -621,10 +726,7 @@ LeeBit:
     POP(r1)
     jmp (r1)                                        ; Retorno
 
-org 0xB000                                              ; dir donde se reserva campoBits
-cadena: data "tres tristes tigres comen trigo en un trigal, el primer tigre que...\0"
-comprimido: data ""
-descomprimido: data ""
+
 ;
 ; Debe incorporar este fichero con TODAS sus l�neas, sin modificar
 ; ninguna de ellas, al final de su archivo CDV24.ens
@@ -723,3 +825,8 @@ finBM:
 	POP  (r1)
 	jmp  (r1)
 ;; Grupo:    s.munoz-guerra
+
+org 0xB000                                              ; dir donde se reserva campoBits
+cadena: data "tres tristes tigres comen trigo en un trigal, el primer tigre que...\0"
+Long1:  data 0
+Long2:  data 0
